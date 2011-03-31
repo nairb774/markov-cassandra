@@ -1,0 +1,14 @@
+package markov;
+
+message Chain {
+  repeated string part = 1;
+}
+
+message Tuple {
+  enum Direction {
+    FORWARD = 0;
+    BACKWARD = 1;
+  }
+  required Direction direction = 1;
+  repeated string part = 2;
+}
