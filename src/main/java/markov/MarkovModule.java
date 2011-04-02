@@ -4,8 +4,10 @@ import javax.inject.Singleton;
 
 import markov.CF.TypeMap;
 import markov.MarkovProto.Chain;
+import markov.MarkovProto.Source;
 import markov.MarkovProto.Tuple;
 import markov.ProtoSerializer.ChainProtoSerializer;
+import markov.ProtoSerializer.SourceProtoSerializer;
 import markov.ProtoSerializer.TupleProtoSerializer;
 import me.prettyprint.cassandra.serializers.BooleanSerializer;
 import me.prettyprint.cassandra.serializers.ByteBufferSerializer;
@@ -43,10 +45,17 @@ public class MarkovModule extends AbstractModule {
         serializers.addBinding().to(UUIDSerializer.class);
 
         serializers.addBinding().to(ChainProtoSerializer.class);
+        serializers.addBinding().to(SourceProtoSerializer.class);
         serializers.addBinding().to(TupleProtoSerializer.class);
-        serializers.addBinding().to(IntArraySerializer.class);
+        serializers.addBinding().to(LongArraySerializer.class);
+        serializers.addBinding().to(RIdSerializer.class);
     }
 
+    @Provides
+    public RIdFactory getRIdFactory() {
+        return RIdFactory.get();
+    }
+    
     @Provides
     @Singleton
     public Cluster getCluster() {
@@ -61,6 +70,11 @@ public class MarkovModule extends AbstractModule {
     @Provides
     public CF<Chain> getChainCf(final Keyspace keyspace, final TypeMap typeMap) {
         return new CF<Chain>(keyspace, Chain.class, typeMap);
+    }
+    
+    @Provides
+    public CF<Source> getSourceCf(final Keyspace keyspace, final TypeMap typeMap) {
+        return new CF<Source>(keyspace, Source.class, typeMap);
     }
 
     @Provides

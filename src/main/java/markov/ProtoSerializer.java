@@ -3,6 +3,7 @@ package markov;
 import java.nio.ByteBuffer;
 
 import markov.MarkovProto.Chain;
+import markov.MarkovProto.Source;
 import markov.MarkovProto.Tuple;
 import me.prettyprint.cassandra.serializers.AbstractSerializer;
 
@@ -15,6 +16,12 @@ public class ProtoSerializer<T extends Message> extends AbstractSerializer<T> {
     public static class ChainProtoSerializer extends ProtoSerializer<Chain> {
         public ChainProtoSerializer() {
             super(Chain.getDefaultInstance());
+        }
+    }
+
+    public static class SourceProtoSerializer extends ProtoSerializer<Source> {
+        public SourceProtoSerializer() {
+            super(Source.getDefaultInstance());
         }
     }
 

@@ -14,26 +14,28 @@ import com.google.common.collect.Lists;
 
 public class MarkovSchema {
     private final Cluster cluster;
-    
+
     @Inject
     public MarkovSchema(final Cluster cluster) {
         this.cluster = cluster;
     }
-    
+
     public void setup() {
         final KeyspaceDefinition describeKeyspace = cluster.describeKeyspace("main");
         if (describeKeyspace == null) {
             final List<ColumnFamilyDefinition> mainColumns = Lists.newArrayList();
             mainColumns.add(defineChain());
+            mainColumns.add(defineSource());
             mainColumns.add(defineTuple());
             cluster.addKeyspace(HFactory.createKeyspaceDefinition("main",
-                    "org.apache.cassandra.locator.SimpleStrategy", 3, mainColumns));
+                    "org.apache.cassandra.locator.SimpleStrategy", 1, mainColumns));
             return;
         }
         ensureColumnFamily(describeKeyspace, defineChain());
+        ensureColumnFamily(describeKeyspace, defineSource());
         ensureColumnFamily(describeKeyspace, defineTuple());
     }
-    
+
     private void ensureColumnFamily(final KeyspaceDefinition describeKeyspace, final ColumnFamilyDefinition cf) {
         boolean found = false;
         for (final ColumnFamilyDefinition columnFamilyDefinition : describeKeyspace.getCfDefs()) {
@@ -46,12 +48,16 @@ public class MarkovSchema {
             cluster.addColumnFamily(cf);
         }
     }
-    
+
     private ColumnFamilyDefinition defineChain() {
-        return HFactory.createColumnFamilyDefinition("main", "Chain", ComparatorType.LEXICALUUIDTYPE);
+        return HFactory.createColumnFamilyDefinition("main", "Chain", ComparatorType.BYTESTYPE);
     }
-    
+
     private ColumnFamilyDefinition defineTuple() {
         return HFactory.createColumnFamilyDefinition("main", "Tuple", ComparatorType.UTF8TYPE);
+    }
+
+    private ColumnFamilyDefinition defineSource() {
+        return HFactory.createColumnFamilyDefinition("main", "Source", ComparatorType.BYTESTYPE);
     }
 }

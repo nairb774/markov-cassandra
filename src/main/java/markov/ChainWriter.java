@@ -1,15 +1,12 @@
 package markov;
 
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.Set;
-import java.util.UUID;
 
 import javax.inject.Inject;
 
 import markov.MarkovProto.Chain;
 
-import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
 public class ChainWriter {
@@ -21,11 +18,11 @@ public class ChainWriter {
         this.chainCf = chainCf;
     }
 
-    public Entry<Set<Chain>, Set<UUID>> txnWriter(final List<String> pieces) {
+    public Set<Chain> txnWriter(final RId txnId, final List<String> pieces) {
         final int chains = pieces.size() - chainSize;
         final Set<Chain> chainSet = Sets.newHashSet();
-        final Set<UUID> uuidSet = Sets.newHashSet();
 
+        final RIdFactory idFactory = new RIdFactory(txnId);
         for (int i = 0; i <= chains; i++) {
             final Chain chain = Chain.newBuilder().addAllPart(pieces.subList(i, i + chainSize)).build();
 
@@ -37,14 +34,13 @@ public class ChainWriter {
                 flag |= 2;
             }
 
-            final UUID uuid = UUID.randomUUID();
-            chainCf.forKey(chain).add(uuid, new byte[] { flag });
+            final RId id = idFactory.next();
+            chainCf.forKey(chain).add(id, new byte[] { flag });
 
             chainSet.add(chain);
-            uuidSet.add(uuid);
         }
         chainCf.flush();
 
-        return Maps.immutableEntry(chainSet, uuidSet);
+        return chainSet;
     }
 }

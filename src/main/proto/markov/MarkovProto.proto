@@ -4,6 +4,10 @@ message Chain {
   repeated string part = 1;
 }
 
+message Source {
+  required string name = 1;
+}
+
 message Tuple {
   enum Direction {
     FORWARD = 0;

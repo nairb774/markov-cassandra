@@ -4,7 +4,6 @@ import java.lang.reflect.Array;
 import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -12,41 +11,31 @@ import java.util.Set;
 
 import javax.inject.Inject;
 
-import me.prettyprint.cassandra.serializers.BooleanSerializer;
-import me.prettyprint.cassandra.serializers.ByteBufferSerializer;
-import me.prettyprint.cassandra.serializers.BytesArraySerializer;
-import me.prettyprint.cassandra.serializers.DateSerializer;
-import me.prettyprint.cassandra.serializers.DoubleSerializer;
-import me.prettyprint.cassandra.serializers.IntegerSerializer;
-import me.prettyprint.cassandra.serializers.LongSerializer;
-import me.prettyprint.cassandra.serializers.UUIDSerializer;
 import me.prettyprint.hector.api.Keyspace;
 import me.prettyprint.hector.api.Serializer;
 import me.prettyprint.hector.api.beans.HColumn;
 import me.prettyprint.hector.api.factory.HFactory;
 import me.prettyprint.hector.api.mutation.Mutator;
 
-import com.google.common.base.Function;
 import com.google.common.collect.Maps;
 import com.google.inject.TypeLiteral;
 
 public class CF<K> {
+    public interface IterInfo<N> {
+        N next(final N name);
+    }
+
     private class CFIterable<N, V> implements Iterable<HColumn<N, V>> {
         private final K key;
-        private final N maxName;
-        private N minName;
         private final Serializer<N> nameSerializer;
-        private final Function<N, N> nextName;
+        private final IterInfo<N> iterInfo;
         private final Serializer<V> valueSerializer;
 
-        private CFIterable(final K key, final N minName, final N maxName, final Function<N, N> nextName,
-                Class<V> valueType) {
+        private CFIterable(final K key, final IterInfo<N> iterInfo, Class<V> valueType) {
             this.key = key;
-            this.minName = minName;
-            this.maxName = maxName;
-            this.nextName = nextName;
-            final ParameterizedType type = (ParameterizedType) TypeLiteral.get(nextName.getClass())
-                    .getSupertype(Function.class).getType();
+            this.iterInfo = iterInfo;
+            final ParameterizedType type = (ParameterizedType) TypeLiteral.get(iterInfo.getClass())
+                    .getSupertype(IterInfo.class).getType();
             final Type baseType = type.getActualTypeArguments()[0];
             if (!(baseType instanceof Class)) {
                 throw new IllegalStateException(baseType.toString());
@@ -57,7 +46,7 @@ public class CF<K> {
 
         @Override
         public Iterator<HColumn<N, V>> iterator() {
-            return new CFIterator<N, V>(key, minName, maxName, nextName, nameSerializer, valueSerializer);
+            return new CFIterator<N, V>(key, iterInfo, nameSerializer, valueSerializer);
         }
     }
 
@@ -67,18 +56,16 @@ public class CF<K> {
         private boolean finished = false;
         private final K key;
         private HColumn<N, V> lastColumn;
-        private final N maxName;
         private N minName;
         private final Serializer<N> nameSerializer;
-        private final Function<N, N> nextName;
+        private final IterInfo<N> iterInfo;
         private final Serializer<V> valueSerializer;
 
-        private CFIterator(K key, N minName, N maxName, Function<N, N> nextName, Serializer<N> nameSerializer,
+        private CFIterator(K key, final IterInfo<N> iterInfo, Serializer<N> nameSerializer,
                 Serializer<V> valueSerializer) {
             this.key = key;
-            this.minName = minName;
-            this.maxName = maxName;
-            this.nextName = nextName;
+            this.minName = null;
+            this.iterInfo = iterInfo;
             this.nameSerializer = nameSerializer;
             this.valueSerializer = valueSerializer;
             loadNext();
@@ -90,7 +77,7 @@ public class CF<K> {
                 if (finished) {
                     return false;
                 }
-                minName = nextName.apply(lastColumn.getName());
+                minName = iterInfo.next(lastColumn.getName());
                 if (minName == null) { // There is no next name
                     finished = true;
                 } else {
@@ -104,7 +91,7 @@ public class CF<K> {
         private void loadNext() {
             final List<HColumn<N, V>> list = HFactory
                     .createSliceQuery(keyspace, serializer, nameSerializer, valueSerializer).setKey(key)
-                    .setColumnFamily(cfName).setRange(minName, maxName, false, blockSize).execute().get().getColumns();
+                    .setColumnFamily(cfName).setRange(minName, null, false, blockSize).execute().get().getColumns();
             if (list.size() < blockSize) {
                 finished = true;
             }
@@ -134,9 +121,8 @@ public class CF<K> {
             return this;
         }
 
-        public <N, V> Iterable<HColumn<N, V>> iter(final N minName, final N maxName, final Function<N, N> nextName,
-                final Class<V> valueType) {
-            return new CFIterable<N, V>(key, minName, maxName, nextName, valueType);
+        public <N, V> Iterable<HColumn<N, V>> iter(final IterInfo<N> iterInfo, final Class<V> valueType) {
+            return new CFIterable<N, V>(key, iterInfo, valueType);
         }
     }
 
@@ -151,7 +137,11 @@ public class CF<K> {
         }
 
         private <T> Serializer<T> getSerializer(final Class<T> t) {
-            return (Serializer<T>) typeMap.get(t);
+            final Serializer<T> serializer = (Serializer<T>) typeMap.get(t);
+            if (serializer == null) {
+                throw new IllegalStateException("Serializer for class " + t.getName() + " not configured.");
+            }
+            return serializer;
         }
 
         private <T> Serializer<T> getSerializer(final T t) {
